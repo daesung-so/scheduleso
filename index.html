@@ -103,8 +103,13 @@ header{background:var(--white);border-bottom:1px solid var(--border);padding:12p
 .cal-cell.csa .cal-n{color:var(--accent);}
 .cal-n{font-size:15px;font-weight:700;color:var(--text);}
 /* small shift dots row under date */
-.cal-dots{display:flex;gap:2px;justify-content:center;flex-wrap:wrap;}
-.cal-dot{width:4px;height:4px;border-radius:50%;}
+.cal-cell.isholiday .cal-n{color:var(--red)!important;}
+.cal-cell.isholiday{background:#fff5f5;}
+.cal-cell.isholiday.istoday{background:var(--accent);}
+.cal-cell.isholiday.istoday .cal-n{color:#fff!important;}
+.holiday-label{font-size:8px;font-weight:700;color:var(--red);line-height:1;}
+.td-cell.td-holiday{background:#fff5f5;}
+.holiday-banner{margin:0 14px 12px;background:#fff5f5;border:1.5px solid #fecaca;border-radius:var(--r);padding:9px 14px;font-size:13px;font-weight:700;color:var(--red);display:flex;align-items:center;gap:6px;}
 
 /* inline day detail */
 .cal-detail{background:var(--white);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh);overflow:hidden;margin-top:10px;animation:fadeUp .15s ease;}
@@ -825,6 +830,12 @@ function sh(v){
   return v.slice(0,1);
 }
 function getNum(v){return(v==='1'||v==='2')?v:null;}
+
+// 해당 날짜가 공휴일인지 (첫 번째 직원 기준으로 '공휴' 값 확인)
+function isHoliday(day){
+  if(!EMP.length) return false;
+  return EMP.some(e=>e.s[String(day)]==='공휴');
+}
 const PCLS={core:'cc',svc:'cs2',night:'cn',rest:'cr',vacation:'cv',gobul:'cg',work:'cw',trip:'ct',off:'co',holiday:'co'};
 const DCOL={core:'#2563eb',svc:'#16a34a',night:'#7c3aed',rest:'#94a3b8',vacation:'#d97706',gobul:'#dc2626',work:'#0891b2',trip:'#9333ea'};
 
@@ -921,8 +932,9 @@ function renderDaily(day){
   const ov=loadOv();
   const mods=Object.entries(ov).filter(([k])=>k.endsWith(`_${day}`));
   const banner=mods.length?`<div class="ov-banner"><div class="ob-l"><div class="ob-title">🔶 긴급수정 적용됨</div><div class="ob-list">${mods.map(([k,v])=>`${k.split('_')[0]} → ${v.val}`).join(' · ')}</div></div><button class="ob-clr" onclick="clearDayDaily(${day})">되돌리기</button></div>`:'';
+  const hdayBanner=isHoliday(day)?`<div class="holiday-banner">🎌 공휴일</div>`:'';
   document.getElementById('panel-daily').innerHTML=`
-    ${banner}
+    ${banner}${hdayBanner}
     <div class="d-nav">
       <button class="nav-btn" onclick="chDay(-1)">◀</button>
       <div class="d-date">
@@ -972,11 +984,13 @@ function renderCalendar(){
     if(dow===0)cl+=' cs';
     if(dow===6)cl+=' csa';
     if(d===selCalDay)cl+=' sel';
+    const hday=isHoliday(d);
+    if(hday)cl+=' isholiday';
     // dots
     const dots=new Set();
     EMP.forEach(e=>{const t=tp(getVal(e.name,d),e.part);if(DCOL[t])dots.add(DCOL[t]);});
     const dotsH=[...dots].slice(0,5).map(c=>`<div class="cal-dot" style="background:${c}"></div>`).join('');
-    h+=`<div class="${cl}" onclick="calClick(${d})"><div class="cal-n">${d}</div><div class="cal-dots">${dotsH}</div></div>`;
+    h+=`<div class="${cl}" onclick="calClick(${d})"><div class="cal-n">${d}</div>${hday?'<div class="holiday-label">공휴</div>':''}<div class="cal-dots">${dotsH}</div></div>`;
   }
 
   // inline detail
@@ -1060,11 +1074,12 @@ function renderGrid(){
     const isSun=dow===0,isSat=dow===6;
     let cl='th-day';
     if(isTod)cl+=' th-today';
+    else if(isHoliday(d))cl+=' th-sun';
     else if(isSun)cl+=' th-sun';
     else if(isSat)cl+=' th-sat';
     thead+=`<th class="${cl}" onclick="gridDayClick(${d})" style="cursor:pointer;">
       <span class="th-day-num">${d}</span>
-      <span class="th-day-dow">${DOW[dow]}</span>
+      <span class="th-day-dow">${isHoliday(d)?'공휴':DOW[dow]}</span>
     </th>`;
   }
   thead+='</tr></thead>';
@@ -1092,6 +1107,7 @@ function renderGrid(){
         const mod=isMod(e.name,d);
         let tdCl='td-cell';
         if(isT)tdCl+=' td-today';
+        else if(isHoliday(d))tdCl+=' td-holiday';
         else if(isSun)tdCl+=' td-weekend-sun';
         else if(isSat)tdCl+=' td-weekend-sat';
         if(mod)tdCl+=' td-mod';
