@@ -329,7 +329,7 @@ th,td{white-space:nowrap;padding:0;}
     <div class="admin-popup" id="admin-popup" onclick="event.stopPropagation()">
       <div class="admin-menu-item" onclick="adminAction('upload')">📤 근무표 업로드</div>
       <div class="admin-menu-item" onclick="adminAction('save')">💾 파일로 저장</div>
-      <div class="admin-menu-item danger disabled" id="admin-del-item" onclick="adminAction('delete')">🗑 이 달 삭제</div>
+      <div class="admin-menu-item danger" id="admin-del-item" onclick="adminAction('delete')">🗑 이 달 삭제</div>
     </div>
   </div>
 </div>
@@ -468,14 +468,100 @@ let smsDayOverride=null;
 
 // ── STORAGE ──
 const MK='my_name_2026';
+const JKEY='$2a$10$tMh0JYAlhrIJGLZgz8fc/.9zbm2F.29jUHh6RK0dioxpRLlsYDMVq';
+const JBIN_ID_KEY='jsonbin_id';
+
 function monthKey(y,m){return `sch_ov_${y}_${String(m).padStart(2,'0')}`;}
 function empKey(y,m){return `sch_emp_${y}_${String(m).padStart(2,'0')}`;}
 function loadOv(){try{return JSON.parse(localStorage.getItem(monthKey(CUR_YEAR,CUR_MONTH))||'{}');}catch(e){return {};}}
-function saveOv(o){localStorage.setItem(monthKey(CUR_YEAR,CUR_MONTH),JSON.stringify(o));}
+function saveOv(o){
+  localStorage.setItem(monthKey(CUR_YEAR,CUR_MONTH),JSON.stringify(o));
+  syncToCloud();
+}
 function getVal(name,day){const ov=loadOv();const k=`${name}_${day}`;if(ov[k])return ov[k].val;return EMP.find(e=>e.name===name)?.s[String(day)]||'';}
 function isMod(name,day){return !!loadOv()[`${name}_${day}`];}
 function getMyName(){return localStorage.getItem(MK)||'';}
 function setMyName(n){localStorage.setItem(MK,n);}
+
+// ── JSONBIN 동기화 ──
+function getAllOv(){
+  // 모든 달의 긴급수정 데이터 수집
+  const all={};
+  // BUILTIN + stored months
+  const months=getSortedMonths();
+  months.forEach(m=>{
+    const k=monthKey(m.year,m.month);
+    const d=localStorage.getItem(k);
+    if(d) try{all[k]=JSON.parse(d);}catch(e){}
+  });
+  return all;
+}
+function applyAllOv(all){
+  Object.entries(all).forEach(([k,v])=>{
+    localStorage.setItem(k,JSON.stringify(v));
+  });
+}
+
+async function syncToCloud(){
+  const binId=localStorage.getItem(JBIN_ID_KEY);
+  const data=getAllOv();
+  try{
+    if(!binId){
+      // 처음 — bin 새로 생성
+      const res=await fetch('https://api.jsonbin.io/v3/b',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-Master-Key':JKEY,'X-Bin-Name':'gumupyo-overrides','X-Bin-Private':'false'},
+        body:JSON.stringify(data)
+      });
+      const json=await res.json();
+      if(json.metadata?.id) localStorage.setItem(JBIN_ID_KEY,json.metadata.id);
+    } else {
+      // 기존 bin 업데이트
+      await fetch(`https://api.jsonbin.io/v3/b/${binId}`,{
+        method:'PUT',
+        headers:{'Content-Type':'application/json','X-Master-Key':JKEY},
+        body:JSON.stringify(data)
+      });
+    }
+  }catch(e){console.log('sync error',e);}
+}
+
+async function fetchFromCloud(){
+  const binId=localStorage.getItem(JBIN_ID_KEY);
+  if(!binId) return;
+  try{
+    const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`,{
+      headers:{'X-Master-Key':JKEY}
+    });
+    const json=await res.json();
+    if(json.record){
+      applyAllOv(json.record);
+    }
+  }catch(e){console.log('fetch error',e);}
+}
+
+// bin ID가 없으면 기존 bin 검색
+async function initCloud(){
+  const binId=localStorage.getItem(JBIN_ID_KEY);
+  if(binId){
+    await fetchFromCloud();
+    return;
+  }
+  // bin 목록에서 gumupyo-overrides 찾기
+  try{
+    const res=await fetch('https://api.jsonbin.io/v3/b',{
+      method:'GET',
+      headers:{'X-Master-Key':JKEY}
+    });
+    if(!res.ok) return;
+    const list=await res.json();
+    const found=list?.find?.(b=>b.snippetMeta?.name==='gumupyo-overrides');
+    if(found){
+      localStorage.setItem(JBIN_ID_KEY,found.id||found.snippetMeta?.id);
+      await fetchFromCloud();
+    }
+  }catch(e){console.log('init cloud error',e);}
+}
 
 // ── PIN ──
 const ADMIN_PIN='2026';
@@ -547,10 +633,7 @@ function renderMonthNav(){
   // 내장 달은 삭제 비활성화
   const mk=`${CUR_YEAR}_${String(CUR_MONTH).padStart(2,'0')}`;
   const delItem=document.getElementById('admin-del-item');
-  if(delItem){
-    if(BUILTIN_MONTHS[mk]){delItem.classList.add('disabled');}
-    else{delItem.classList.remove('disabled');}
-  }
+  if(delItem) delItem.classList.remove('disabled');
 }
 
 function toggleAdminMenu(e){
@@ -567,17 +650,23 @@ function adminAction(action){
 }
 
 function deleteMonth(){
-  if(!confirm(`${CUR_YEAR}년 ${CUR_MONTH}월 근무표를 삭제할까요?`)) return;
-  // localStorage에서 제거
+  // localStorage + BUILTIN 모두에서 제거
+  const mk=`${CUR_YEAR}_${String(CUR_MONTH).padStart(2,'0')}`;
   localStorage.removeItem(empKey(CUR_YEAR,CUR_MONTH));
+  delete BUILTIN_MONTHS[mk];
   const list=getStoredMonths().filter(m=>!(m.year===CUR_YEAR&&m.month===CUR_MONTH));
   saveMonthList(list);
   // 다른 달로 이동
-  const all=getSortedMonths();
-  const remaining=all.filter(m=>!(m.year===CUR_YEAR&&m.month===CUR_MONTH));
+  const remaining=getSortedMonths();
   if(remaining.length>0){
     const last=remaining[remaining.length-1];
     switchMonth(last.year,last.month);
+  } else {
+    // 모든 달 삭제된 경우
+    EMP=[]; DAYS=31; START=0;
+    document.getElementById('h-sub').textContent='근무표 없음';
+    renderMonthNav();
+    document.getElementById('panel-daily').innerHTML='<div style="padding:40px;text-align:center;color:var(--text3);">업로드된 근무표가 없습니다</div>';
   }
 }
 
@@ -658,7 +747,6 @@ function handleXlsx(file){
 
 // ── 파일로 저장 ──
 function saveAsFile(){
-  // 현재 앱 HTML 가져오기
   let html=document.documentElement.outerHTML;
 
   // 모든 달 데이터 수집 (BUILTIN + localStorage 업로드분)
@@ -671,6 +759,24 @@ function saveAsFile(){
     }
   });
 
+  // 긴급수정 내용도 BUILTIN에 반영
+  Object.keys(allMonths).forEach(mk=>{
+    const [y,m]=mk.split('_');
+    const ov=JSON.parse(localStorage.getItem(monthKey(parseInt(y),parseInt(m)))||'{}');
+    if(Object.keys(ov).length>0){
+      allMonths[mk]=allMonths[mk].map(e=>{
+        const updated={...e, s:{...e.s}};
+        Object.entries(ov).forEach(([k,v])=>{
+          const parts=k.split('_');
+          const day=parts.pop();
+          const name=parts.join('_');
+          if(name===e.name) updated.s[day]=v.val;
+        });
+        return updated;
+      });
+    }
+  });
+
   // BUILTIN_MONTHS 교체
   const newBuiltin=`// ── BUILT-IN MONTH DATA ──\nconst BUILTIN_MONTHS=${JSON.stringify(allMonths)};`;
   html=html.replace(/\/\/ ── BUILT-IN MONTH DATA ──[\s\S]*?const BUILTIN_MONTHS=\{[\s\S]*?\};/,newBuiltin);
@@ -678,8 +784,9 @@ function saveAsFile(){
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url;a.download='근무표.html';a.click();
+  a.href=url; a.download='index.html'; a.click();
   URL.revokeObjectURL(url);
+  alert('✅ 저장 완료!\nGitHub에 index.html을 올리면 전체 팀에 반영됩니다.');
 }
 let setupSelected='';
 function openSetup(isChange=false){
@@ -1156,6 +1263,12 @@ updateHeaderStatus();
 renderDaily(TODAY);
 renderCalendar();
 if(!getMyName()) setTimeout(()=>openSetup(),400);
+// 클라우드에서 긴급수정 데이터 가져오기
+initCloud().then(()=>{
+  renderDaily(curDay);
+  renderCalendar();
+  if(activeTab==='grid') renderGrid();
+});
 </script>
 
 
