@@ -966,7 +966,7 @@ function renderDaily(day){
           <span class="count-label">인원</span>
           <div class="count-group">
             <span class="count-unit">주간</span>
-            <span class="count-input" style="display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:var(--accent);">${g.core.length+g.svc.length+g.work.length}</span>
+            <span class="count-input" style="display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:var(--accent);">${g.core.length+g.svc.length+g.work.length+g.gobul.length}</span>
             <span class="count-unit">명</span>
           </div>
           <div class="count-group">
@@ -984,7 +984,7 @@ function updateCountPreview(){}
 function chDay(d){const n=curDay+d;if(n>=1&&n<=DAYS)renderDaily(n);}
 function dailyCopy(){
   const g=groups(curDay);
-  const jugan=g.core.length+g.svc.length+g.work.length;
+  const jugan=g.core.length+g.svc.length+g.work.length+g.gobul.length;
   const yagan=g.night.length;
   navigator.clipboard.writeText(msgText(curDay,g,jugan,yagan)).then(()=>{
     const b=document.getElementById('d-cbtn');if(!b)return;
@@ -1202,7 +1202,7 @@ function openSMS(){
   const day=activeTab==='daily'?curDay:(smsDayOverride||TODAY);
   const g=groups(day);
   const dow=DOW[(START+day-1)%7];
-  const jugan=activeTab==='daily'?g.core.length+g.svc.length+g.work.length:'';
+  const jugan=activeTab==='daily'?g.core.length+g.svc.length+g.work.length+g.gobul.length:'';
   const yagan=activeTab==='daily'?g.night.length:'';
   document.getElementById('sheet-title').textContent=`${CUR_MONTH}월 ${day}일 (${dow}) 문자`;
   document.getElementById('sheet-body').textContent=msgText(day,g,jugan,yagan);
