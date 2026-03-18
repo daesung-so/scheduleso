@@ -447,7 +447,10 @@ let smsDayOverride=null;
 // ── STORAGE ──
 const MK='my_name_2026';
 const JKEY='$2a$10$tMh0JYAlhrIJGLZgz8fc/.9zbm2F.29jUHh6RK0dioxpRLlsYDMVq';
+const JBIN_ID='69ba04fcb7ec241ddc7a7689';
 const JBIN_ID_KEY='jsonbin_id';
+// bin ID 고정 — 모든 기기가 같은 bin 사용
+localStorage.setItem(JBIN_ID_KEY, JBIN_ID);
 
 function monthKey(y,m){return `sch_ov_${y}_${String(m).padStart(2,'0')}`;}
 function empKey(y,m){return `sch_emp_${y}_${String(m).padStart(2,'0')}`;}
