@@ -772,7 +772,8 @@ let setupSelected='';
 function openSetup(isChange=false){
   setupSelected=getMyName();
   const grid=document.getElementById('setup-grid');
-  grid.innerHTML=EMP.map(e=>`<button class="setup-name-btn${e.name===setupSelected?' sel':''}" onclick="selectSetupName('${e.name}',this)">${e.name}</button>`).join('');
+  const sortedEmp=[...EMP].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  grid.innerHTML=sortedEmp.map(e=>`<button class="setup-name-btn${e.name===setupSelected?' sel':''}" onclick="selectSetupName('${e.name}',this)">${e.name}</button>`).join('');
   document.getElementById('setup-confirm').disabled=!setupSelected;
   if(isChange){
     const box=document.querySelector('.setup-box');
@@ -846,26 +847,21 @@ const PCLS={core:'cc',svc:'cs2',night:'cn',rest:'cr',vacation:'cv',gobul:'cg',wo
 const DCOL={core:'#2563eb',svc:'#16a34a',night:'#7c3aed',rest:'#94a3b8',vacation:'#d97706',gobul:'#dc2626',work:'#0891b2',trip:'#9333ea'};
 
 function groups(day){
-  const g={core:[],svc:[],gobul:[],rest:[],night:[],vacation:[],work:[],trip:[]};
+  const g={core:[],svc:[],gobul:[],rest:[],night:[],vacation:[],work:[],jakgum:[],trip:[]};
   EMP.forEach(e=>{
     const v=getVal(e.name,day);const t=tp(v,e.part);
     const num=getNum(v);const mod=isMod(e.name,day);
-    if(g[t])g[t].push({name:e.name,v,num,mod});
+    // 작검은 별도 분리
+    if(v==='작검'||v==='집작') g.jakgum.push({name:e.name,v,num,mod});
+    else if(g[t]) g[t].push({name:e.name,v,num,mod});
   });
   Object.keys(g).forEach(k=>{g[k].sort((a,b)=>(a.num?+a.num:99)-(b.num?+b.num:99));});
   return g;
 }
 
-function msgText(day,g,juganCnt,yaganCnt){
+function msgText(day,g){
   const dow=DOW[(START+day-1)%7];
   let t=`[${CUR_MONTH}/${day}[${dow}] 근무현황]`;
-  // 주간/야간 인원 수 포함
-  if(juganCnt||yaganCnt){
-    const parts=[];
-    if(juganCnt) parts.push(`주간(${juganCnt})`);
-    if(yaganCnt) parts.push(`야간(${yaganCnt})`);
-    t+=`\nㅇ인원: ${parts.join(', ')}`;
-  }
   const f=arr=>arr.map(e=>e.num?`${e.name}(${e.num})`:e.name).join(', ');
   if(g.core.length)t+=`\nㅇCore: ${f(g.core)}`;
   if(g.svc.length)t+=`\nㅇService: ${f(g.svc)}`;
@@ -874,6 +870,7 @@ function msgText(day,g,juganCnt,yaganCnt){
   if(g.night.length)t+=`\nㅇ야근: ${f(g.night)}`;
   if(g.vacation.length)t+=`\nㅇ휴가: ${f(g.vacation)}`;
   if(g.work.length)t+=`\nㅇ작업: ${f(g.work)}`;
+  if(g.jakgum.length)t+=`\nㅇ작검: ${f(g.jakgum)}`;
   if(g.trip.length)t+=`\nㅇ출장: ${f(g.trip)}`;
   return t;
 }
@@ -884,7 +881,7 @@ function shiftRows(g){
     {k:'core',lbl:'Core',cl:'bc'},{k:'svc',lbl:'Service',cl:'bs'},
     {k:'gobul',lbl:'고불',cl:'bg'},{k:'rest',lbl:'숙휴',cl:'br'},
     {k:'night',lbl:'야근',cl:'bn'},{k:'vacation',lbl:'휴가',cl:'bv'},
-    {k:'work',lbl:'작업',cl:'bw'},{k:'trip',lbl:'출장',cl:'bt'}
+    {k:'work',lbl:'작업',cl:'bw'},{k:'jakgum',lbl:'작검',cl:'bw'},{k:'trip',lbl:'출장',cl:'bt'}
   ];
   let rows='';
   secs.forEach(s=>{
@@ -959,38 +956,40 @@ function renderDaily(day){
     <div class="d-body">
       <div class="card">
         <div class="card-head">
-          <span class="card-title">근무 현황</span>
+          <span class="card-title">근무 현황 &nbsp;<span style="color:var(--accent);font-size:11px;font-weight:700;letter-spacing:.3px;">주간 ${g.core.length+g.svc.length+g.work.length+g.jakgum.length+g.gobul.length}명</span><span style="color:var(--text3);font-size:11px;"> · </span><span style="color:var(--purple);font-size:11px;font-weight:700;letter-spacing:.3px;">야간 ${g.night.length}명</span></span>
           <button class="cbtn" id="d-cbtn" onclick="dailyCopy()">문자 복사</button>
-        </div>
-        <div class="count-bar">
-          <span class="count-label">인원</span>
-          <div class="count-group">
-            <span class="count-unit">주간</span>
-            <span class="count-input" style="display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:var(--accent);">${g.core.length+g.svc.length+g.work.length+g.gobul.length}</span>
-            <span class="count-unit">명</span>
-          </div>
-          <div class="count-group">
-            <span class="count-unit">야간</span>
-            <span class="count-input" style="display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:var(--purple);">${g.night.length}</span>
-            <span class="count-unit">명</span>
-          </div>
         </div>
         ${shiftRows(g)}
       </div>
     </div>`;
+}
+function copyText(text, btn, label='문자 복사'){
+  const done=()=>{
+    if(!btn) return;
+    btn.textContent='✓ 복사됨'; btn.classList.add('done');
+    setTimeout(()=>{btn.textContent=label; btn.classList.remove('done');}, 2000);
+  };
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(text).then(done).catch(()=>{
+      // fallback
+      const ta=document.createElement('textarea');
+      ta.value=text; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta); done();
+    });
+  } else {
+    const ta=document.createElement('textarea');
+    ta.value=text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta); done();
+  }
 }
 function getCounts(){return {jugan:'',yagan:''};}
 function updateCountPreview(){}
 function chDay(d){const n=curDay+d;if(n>=1&&n<=DAYS)renderDaily(n);}
 function dailyCopy(){
   const g=groups(curDay);
-  const jugan=g.core.length+g.svc.length+g.work.length+g.gobul.length;
-  const yagan=g.night.length;
-  navigator.clipboard.writeText(msgText(curDay,g,jugan,yagan)).then(()=>{
-    const b=document.getElementById('d-cbtn');if(!b)return;
-    b.textContent='✓ 복사됨';b.classList.add('done');
-    setTimeout(()=>{b.textContent='문자 복사';b.classList.remove('done');},2000);
-  });
+  copyText(msgText(curDay,g), document.getElementById('d-cbtn'), '문자 복사');
 }
 function clearDayDaily(day){
   const ov=loadOv();
@@ -1068,11 +1067,7 @@ function calClick(d){
 function calClose(){selCalDay=null;smsDayOverride=null;renderCalendar();}
 function calCopy(){
   const g=groups(selCalDay);
-  navigator.clipboard.writeText(msgText(selCalDay,g)).then(()=>{
-    const b=document.getElementById('cal-cbtn');if(!b)return;
-    b.textContent='✓';b.classList.add('done');
-    setTimeout(()=>{b.textContent='복사';b.classList.remove('done');},2000);
-  });
+  copyText(msgText(selCalDay,g), document.getElementById('cal-cbtn'), '복사');
 }
 function clearDay(day){
   const ov=loadOv();
@@ -1190,11 +1185,7 @@ function closePopup(){
 function popupCopy(){
   if(!popupDay)return;
   const g=groups(popupDay);
-  navigator.clipboard.writeText(msgText(popupDay,g)).then(()=>{
-    const b=document.getElementById('popup-copy');
-    b.textContent='✓';b.classList.add('done');
-    setTimeout(()=>{b.textContent='복사';b.classList.remove('done');},2000);
-  });
+  copyText(msgText(popupDay,g), document.getElementById('popup-copy'), '복사');
 }
 
 // ── SMS ──
@@ -1202,20 +1193,14 @@ function openSMS(){
   const day=activeTab==='daily'?curDay:(smsDayOverride||TODAY);
   const g=groups(day);
   const dow=DOW[(START+day-1)%7];
-  const jugan=activeTab==='daily'?g.core.length+g.svc.length+g.work.length+g.gobul.length:'';
-  const yagan=activeTab==='daily'?g.night.length:'';
   document.getElementById('sheet-title').textContent=`${CUR_MONTH}월 ${day}일 (${dow}) 문자`;
-  document.getElementById('sheet-body').textContent=msgText(day,g,jugan,yagan);
+  document.getElementById('sheet-body').textContent=msgText(day,g);
   document.getElementById('sms-sheet').classList.add('open');
 }
 function closeSheet(e){if(e.target===document.getElementById('sms-sheet'))document.getElementById('sms-sheet').classList.remove('open');}
 function sheetCopy(){
   const text=document.getElementById('sheet-body').textContent;
-  navigator.clipboard.writeText(text).then(()=>{
-    const b=document.getElementById('sheet-copy');
-    b.textContent='✓ 복사됨';b.classList.add('done');
-    setTimeout(()=>{b.textContent='복사';b.classList.remove('done');},2000);
-  });
+  copyText(text, document.getElementById('sheet-copy'), '복사');
 }
 
 // ── EDIT ──
