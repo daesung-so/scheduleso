@@ -123,7 +123,13 @@ header{background:var(--white);border-bottom:1px solid var(--border);padding:12p
 .li{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);font-weight:500;}
 .ld{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
 
-/* ── MONTH NAV ── */
+/* ── COUNT INPUT ── */
+.count-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fafbfc;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.count-label{font-size:12px;font-weight:700;color:var(--text2);}
+.count-group{display:flex;align-items:center;gap:6px;}
+.count-input{width:48px;height:32px;border:1.5px solid var(--border2);border-radius:8px;font-size:14px;font-weight:700;text-align:center;font-family:inherit;color:var(--text);outline:none;background:var(--white);}
+.count-input:focus{border-color:var(--accent);}
+.count-unit{font-size:12px;color:var(--text3);font-weight:600;}
 .month-nav{background:var(--white);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;z-index:185;}
 .month-nav-btn{width:36px;height:36px;border-radius:10px;border:1.5px solid var(--border2);background:var(--bg);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0;}
 .month-nav-btn:active{background:var(--border);}
@@ -850,9 +856,16 @@ function groups(day){
   return g;
 }
 
-function msgText(day,g){
+function msgText(day,g,juganCnt,yaganCnt){
   const dow=DOW[(START+day-1)%7];
-  let t=`[3/${day}[${dow}] 근무현황]`;
+  let t=`[${CUR_MONTH}/${day}[${dow}] 근무현황]`;
+  // 주간/야간 인원 수 포함
+  if(juganCnt||yaganCnt){
+    const parts=[];
+    if(juganCnt) parts.push(`주간(${juganCnt})`);
+    if(yaganCnt) parts.push(`야간(${yaganCnt})`);
+    t+=`\nㅇ인원: ${parts.join(', ')}`;
+  }
   const f=arr=>arr.map(e=>e.num?`${e.name}(${e.num})`:e.name).join(', ');
   if(g.core.length)t+=`\nㅇCore: ${f(g.core)}`;
   if(g.svc.length)t+=`\nㅇService: ${f(g.svc)}`;
@@ -949,14 +962,31 @@ function renderDaily(day){
           <span class="card-title">근무 현황</span>
           <button class="cbtn" id="d-cbtn" onclick="dailyCopy()">문자 복사</button>
         </div>
+        <div class="count-bar">
+          <span class="count-label">인원</span>
+          <div class="count-group">
+            <span class="count-unit">주간</span>
+            <span class="count-input" style="display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:var(--accent);">${g.core.length+g.svc.length+g.work.length}</span>
+            <span class="count-unit">명</span>
+          </div>
+          <div class="count-group">
+            <span class="count-unit">야간</span>
+            <span class="count-input" style="display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:var(--purple);">${g.night.length}</span>
+            <span class="count-unit">명</span>
+          </div>
+        </div>
         ${shiftRows(g)}
       </div>
     </div>`;
 }
+function getCounts(){return {jugan:'',yagan:''};}
+function updateCountPreview(){}
 function chDay(d){const n=curDay+d;if(n>=1&&n<=DAYS)renderDaily(n);}
 function dailyCopy(){
   const g=groups(curDay);
-  navigator.clipboard.writeText(msgText(curDay,g)).then(()=>{
+  const jugan=g.core.length+g.svc.length+g.work.length;
+  const yagan=g.night.length;
+  navigator.clipboard.writeText(msgText(curDay,g,jugan,yagan)).then(()=>{
     const b=document.getElementById('d-cbtn');if(!b)return;
     b.textContent='✓ 복사됨';b.classList.add('done');
     setTimeout(()=>{b.textContent='문자 복사';b.classList.remove('done');},2000);
@@ -1172,8 +1202,10 @@ function openSMS(){
   const day=activeTab==='daily'?curDay:(smsDayOverride||TODAY);
   const g=groups(day);
   const dow=DOW[(START+day-1)%7];
+  const jugan=activeTab==='daily'?g.core.length+g.svc.length+g.work.length:'';
+  const yagan=activeTab==='daily'?g.night.length:'';
   document.getElementById('sheet-title').textContent=`${CUR_MONTH}월 ${day}일 (${dow}) 문자`;
-  document.getElementById('sheet-body').textContent=msgText(day,g);
+  document.getElementById('sheet-body').textContent=msgText(day,g,jugan,yagan);
   document.getElementById('sms-sheet').classList.add('open');
 }
 function closeSheet(e){if(e.target===document.getElementById('sms-sheet'))document.getElementById('sms-sheet').classList.remove('open');}
