@@ -129,8 +129,9 @@ header{background:var(--white);border-bottom:1px solid var(--border);padding:12p
 /* ── ADMIN MENU ── */
 .admin-menu-btn{width:36px;height:36px;border-radius:10px;border:1.5px solid var(--border2);background:var(--bg);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);flex-shrink:0;}
 .admin-menu-btn:active{background:var(--border);}
-.admin-popup{display:none;position:absolute;right:14px;top:60px;background:var(--white);border-radius:14px;border:1px solid var(--border);box-shadow:0 8px 24px rgba(0,0,0,.12);overflow:hidden;z-index:500;min-width:160px;animation:fadeUp .15s ease;}
-.admin-popup.open{display:block;}
+.admin-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:998;align-items:center;justify-content:center;}
+.admin-overlay.open{display:flex;}
+.admin-popup{background:var(--white);border-radius:16px;border:1px solid var(--border);box-shadow:0 8px 24px rgba(0,0,0,.15);overflow:hidden;min-width:220px;animation:fadeUp .15s ease;}
 .admin-menu-item{display:flex;align-items:center;gap:10px;padding:13px 16px;font-size:14px;font-weight:600;cursor:pointer;color:var(--text);border-bottom:1px solid var(--border);}
 .admin-menu-item:last-child{border-bottom:none;}
 .admin-menu-item:active{background:var(--bg);}
@@ -326,10 +327,12 @@ th,td{white-space:nowrap;padding:0;}
     <button class="month-nav-btn" id="month-next" onclick="navMonth(1)">▶</button>
   </div>
   <!-- Admin popup menu -->
-  <div class="admin-popup" id="admin-popup">
-    <div class="admin-menu-item" onclick="adminAction('upload')">📤 근무표 업로드</div>
-    <div class="admin-menu-item" onclick="adminAction('save')">💾 파일로 저장</div>
-    <div class="admin-menu-item danger" id="admin-del-item" onclick="adminAction('delete')">🗑 이 달 삭제</div>
+  <div class="admin-overlay" id="admin-overlay" onclick="closeAdminMenu()">
+    <div class="admin-popup" id="admin-popup" onclick="event.stopPropagation()">
+      <div class="admin-menu-item" onclick="adminAction('upload')">📤 근무표 업로드</div>
+      <div class="admin-menu-item" onclick="adminAction('save')">💾 파일로 저장</div>
+      <div class="admin-menu-item danger" id="admin-del-item" onclick="adminAction('delete')">🗑 이 달 삭제</div>
+    </div>
   </div>
 </div>
 <input type="file" id="xlsx-input" accept=".xlsx,.xls" style="display:none;" onchange="handleXlsx(this.files[0])">
@@ -590,11 +593,10 @@ function renderMonthNav(){
 
 function toggleAdminMenu(e){
   e.stopPropagation();
-  const p=document.getElementById('admin-popup');
-  p.classList.toggle('open');
+  document.getElementById('admin-overlay').classList.toggle('open');
 }
 function closeAdminMenu(){
-  document.getElementById('admin-popup').classList.remove('open');
+  document.getElementById('admin-overlay').classList.remove('open');
 }
 function adminAction(action){
   closeAdminMenu();
@@ -1187,7 +1189,6 @@ function goToday(){
 }
 
 // ── INIT ──
-document.addEventListener('click', ()=>closeAdminMenu());
 renderMonthNav();
 updateHeaderStatus();
 renderDaily(TODAY);
