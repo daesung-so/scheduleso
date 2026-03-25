@@ -1126,7 +1126,14 @@ function renderCalendar(){
     const ov=loadOv();
     const mods=Object.entries(ov).filter(([k])=>k.endsWith(`_${selCalDay}`));
     const banner=mods.length?`<div class="ov-banner"><div class="ob-l"><div class="ob-title">🔶 긴급수정 적용됨</div><div class="ob-list">${mods.map(([k,v])=>`${k.split('_')[0]} → ${v.val}`).join(' · ')}</div></div><button class="ob-clr" onclick="clearDay(${selCalDay})">되돌리기</button></div>`:'';
-    detail=`${banner}<div class="cal-detail">
+    // 공지/투표 마감일 배너
+    const deadlines=getNoticeDeadlinesForMonth();
+    const dayDeadlines=deadlines[selCalDay]||[];
+    const deadlineBanner=dayDeadlines.length?`<div style="margin:0 0 8px;background:var(--al);border:1.5px solid #bfdbfe;border-radius:var(--r);padding:10px 14px;">
+      <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px;">📌 마감일</div>
+      ${dayDeadlines.map(t=>`<div style="font-size:13px;color:var(--text2);padding:2px 0;">· ${t}</div>`).join('')}
+    </div>`:'';
+    detail=`${banner}${deadlineBanner}<div class="cal-detail">
       <div class="cal-detail-head">
         <div class="cal-detail-title">${CUR_MONTH}월 ${selCalDay}일 (${dow}요일)</div>
         <div class="cal-detail-acts">
