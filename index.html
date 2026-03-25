@@ -630,6 +630,10 @@ function requirePin(action){
     else if(action==='delete') deleteMonth();
     else if(action==='edit') openEdit();
     else if(action==='board') openBModal();
+    else if(action.startsWith('editboard_')){
+      const parts=action.split('_');
+      openBModal(parts[1],parseInt(parts[2]));
+    }
     else if(action.startsWith('delboard_')){
       const parts=action.split('_');
       deleteBoard(parts[1],parseInt(parts[2]));
@@ -1371,19 +1375,10 @@ let boardData={notices:[],votes:[]};
 let bType='notice', bAnon=false;
 
 async function getBoardBinId(){
-  let id=localStorage.getItem(BOARD_BIN_KEY);
-  if(id) return id;
-  try{
-    const res=await fetch('https://api.jsonbin.io/v3/b',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','X-Master-Key':JKEY,'X-Bin-Name':'gumupyo-board','X-Bin-Private':'false'},
-      body:JSON.stringify({notices:[],votes:[]})
-    });
-    const json=await res.json();
-    id=json?.metadata?.id;
-    if(id) localStorage.setItem(BOARD_BIN_KEY,id);
-  }catch(e){}
-  return id;
+  // 고정 bin ID — 모든 기기 공유
+  const FIXED_BOARD_BIN='69c33eb4aa77b81da917cab7';
+  localStorage.setItem(BOARD_BIN_KEY, FIXED_BOARD_BIN);
+  return FIXED_BOARD_BIN;
 }
 async function loadBoardFromCloud(){
   const id=await getBoardBinId();
@@ -1426,15 +1421,40 @@ function addVoteOpt(val=''){
   div.innerHTML=`<input class="modal-inp" placeholder="항목 ${idx+1}" value="${val}"><button class="vote-opt-del" onclick="this.parentElement.remove()">✕</button>`;
   list.appendChild(div);
 }
-function openBModal(){
+let editingBoardId=null, editingBoardType=null;
+
+function openBModal(editType=null, editId=null){
+  editingBoardId=editId;
+  editingBoardType=editType;
   document.getElementById('b-title').value='';
   document.getElementById('b-content').value='';
   document.getElementById('b-deadline').value='';
   document.getElementById('b-vote-deadline').value='';
   document.getElementById('b-opts-list').innerHTML='';
-  addVoteOpt('');addVoteOpt('');
   bAnon=false; setAnon(false);
-  setBType('notice');
+
+  if(editType==='notice'&&editId){
+    const item=boardData.notices.find(n=>n.id===editId);
+    if(item){
+      setBType('notice');
+      document.getElementById('b-title').value=item.title||'';
+      document.getElementById('b-content').value=item.content||'';
+      document.getElementById('b-deadline').value=item.deadline||'';
+    }
+  } else if(editType==='vote'&&editId){
+    const item=boardData.votes.find(v=>v.id===editId);
+    if(item){
+      setBType('vote');
+      document.getElementById('b-title').value=item.title||'';
+      document.getElementById('b-vote-deadline').value=item.deadline||'';
+      (item.options||[]).forEach(o=>addVoteOpt(o));
+      bAnon=item.anon||false; setAnon(bAnon);
+    }
+  } else {
+    setBType('notice');
+    addVoteOpt('');addVoteOpt('');
+  }
+  document.querySelector('.bmodal-title').textContent=editId?'수정하기':'새 글 작성';
   document.getElementById('bmodal-overlay').classList.add('open');
 }
 function closeBModal(e){if(e.target===document.getElementById('bmodal-overlay'))document.getElementById('bmodal-overlay').classList.remove('open');}
@@ -1445,14 +1465,25 @@ async function saveBoard(){
   if(bType==='notice'){
     const content=document.getElementById('b-content').value.trim();
     const deadline=document.getElementById('b-deadline').value;
-    boardData.notices.unshift({id:Date.now(),title,content,deadline,ts:Date.now()});
+    if(editingBoardId){
+      const idx=boardData.notices.findIndex(n=>n.id===editingBoardId);
+      if(idx>=0) boardData.notices[idx]={...boardData.notices[idx],title,content,deadline};
+    } else {
+      boardData.notices.unshift({id:Date.now(),title,content,deadline,ts:Date.now()});
+    }
   } else {
     const opts=[...document.getElementById('b-opts-list').querySelectorAll('input')]
       .map(i=>i.value.trim()).filter(Boolean);
     if(opts.length<2){alert('항목을 2개 이상 입력하세요');return;}
     const deadline=document.getElementById('b-vote-deadline').value;
-    boardData.votes.unshift({id:Date.now(),title,options:opts,votes:{},anon:bAnon,deadline,ts:Date.now()});
+    if(editingBoardId){
+      const idx=boardData.votes.findIndex(v=>v.id===editingBoardId);
+      if(idx>=0) boardData.votes[idx]={...boardData.votes[idx],title,options:opts,anon:bAnon,deadline};
+    } else {
+      boardData.votes.unshift({id:Date.now(),title,options:opts,votes:{},anon:bAnon,deadline,ts:Date.now()});
+    }
   }
+  editingBoardId=null; editingBoardType=null;
   document.getElementById('bmodal-overlay').classList.remove('open');
   await saveBoardToCloud();
   renderBoard();
@@ -1533,6 +1564,7 @@ function renderBoard(){
           <div><div class="board-title">${item.title}</div><div class="board-meta">${new Date(item.ts).toLocaleDateString('ko-KR')}</div></div>
           <div style="display:flex;align-items:center;gap:8px;">
             <span class="board-badge ${isExpired?'bb-done':'bb-notice'}">${isExpired?'만료':'공지'}</span>
+            <button class="board-del" style="color:var(--accent);font-size:14px;" onclick="requirePin('editboard_notice_${item.id}')">✏️</button>
             <button class="board-del" onclick="requirePin('delboard_notice_${item.id}')">🗑</button>
           </div>
         </div>
@@ -1571,6 +1603,7 @@ function renderBoard(){
           <div><div class="board-title">${item.title}</div><div class="board-meta">${new Date(item.ts).toLocaleDateString('ko-KR')}</div></div>
           <div style="display:flex;align-items:center;gap:8px;">
             <span class="board-badge ${isExpired?'bb-done':'bb-vote'}">${isExpired?'마감':'투표'}</span>
+            <button class="board-del" style="color:var(--accent);font-size:14px;" onclick="requirePin('editboard_vote_${item.id}')">✏️</button>
             <button class="board-del" onclick="requirePin('delboard_vote_${item.id}')">🗑</button>
           </div>
         </div>
