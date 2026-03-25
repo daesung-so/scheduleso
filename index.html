@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#ffffff">
-<title>근무표</title>
+<title>성수SO팀 근무표</title>
 <style>
 :root{
   --bg:#f5f6f8;--white:#fff;--border:#e4e8ed;--border2:#d0d6de;
@@ -352,7 +352,7 @@ th,td{white-space:nowrap;padding:0;}
 <header>
   <div class="h-row1">
     <div class="h-left">
-      <div class="h-title">근무표</div>
+      <div class="h-title">성수SO팀</div>
       <div class="h-sub" id="h-sub">2026년 3월</div>
     </div>
     <div class="h-btns">
@@ -434,7 +434,14 @@ th,td{white-space:nowrap;padding:0;}
     </div>
     <div class="modal-row"><div class="modal-label">제목</div><input class="modal-inp" id="b-title" placeholder="제목을 입력하세요"></div>
     <div class="modal-row" id="b-content-row"><div class="modal-label">내용</div><textarea class="modal-inp" id="b-content" rows="3" placeholder="내용을 입력하세요" style="resize:none;"></textarea></div>
-    <div class="modal-row" id="b-deadline-row"><div class="modal-label">마감일 (선택)</div><input class="modal-inp" id="b-deadline" type="date"></div>
+    <div class="modal-row" id="b-deadline-row">
+      <div class="modal-label">기간</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input class="modal-inp" id="b-startdate" type="date" style="flex:1;">
+        <span style="color:var(--text3);font-size:13px;">~</span>
+        <input class="modal-inp" id="b-deadline" type="date" style="flex:1;">
+      </div>
+    </div>
     <div id="b-vote-opts" style="display:none;">
       <div class="modal-row"><div class="modal-label">투표 마감일 (선택)</div><input class="modal-inp" id="b-vote-deadline" type="date"></div>
       <div class="modal-row">
@@ -529,6 +536,7 @@ function getToday(){
 }
 let TODAY=getToday();
 let activeTab='daily', selCalDay=null, gridFlt='all', popupDay=null;
+let calShowSched=true; // 달력 근무표 표시 여부
 let curDay=TODAY;
 let smsDayOverride=null;
 
@@ -854,17 +862,23 @@ function saveAsFile(){
   URL.revokeObjectURL(url);
   alert('✅ 저장 완료!\nGitHub에 index.html을 올리면 전체 팀에 반영됩니다.');
 }
+// 추가 팀원 (근무표 외 인원)
+const EXTRA_MEMBERS=['김병구','김세훈','오아라','윤대명','이재욱','이승형','한중진'];
+
 let setupSelected='';
 function openSetup(isChange=false){
   setupSelected=getMyName();
   const grid=document.getElementById('setup-grid');
-  const sortedEmp=[...EMP].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
-  grid.innerHTML=sortedEmp.map(e=>`<button class="setup-name-btn${e.name===setupSelected?' sel':''}" onclick="selectSetupName('${e.name}',this)">${e.name}</button>`).join('');
+  // EMP 이름 + 추가 팀원 합치고 가나다순
+  const allNames=[...new Set([...EMP.map(e=>e.name),...EXTRA_MEMBERS])].sort((a,b)=>a.localeCompare(b,'ko'));
+  grid.innerHTML=allNames.map(name=>`<button class="setup-name-btn${name===setupSelected?' sel':''}" onclick="selectSetupName('${name}',this)">${name}</button>`).join('');
   document.getElementById('setup-confirm').disabled=!setupSelected;
   if(isChange){
-    const box=document.querySelector('.setup-box');
     document.querySelector('.setup-title').textContent='이름 변경';
     document.querySelector('.setup-sub').textContent='변경할 이름을 선택하세요';
+  } else {
+    document.querySelector('.setup-title').textContent='내 이름 선택';
+    document.querySelector('.setup-sub').textContent='선택하면 내 근무가 항상 강조 표시됩니다';
   }
   document.getElementById('setup-overlay').style.display='flex';
 }
@@ -1113,12 +1127,14 @@ function renderCalendar(){
     if(hday)cl+=' isholiday';
     // 공지 마감일 체크
     const deadlines=getNoticeDeadlinesForMonth();
-    const hasDeadline=deadlines[d]&&deadlines[d].length>0;
+    const dayItems=deadlines[d]||[];
+    const hasNotice=dayItems.some(i=>i.type==='notice');
+    const hasVote=dayItems.some(i=>i.type==='vote');
     // dots
     const dots=new Set();
     EMP.forEach(e=>{const t=tp(getVal(e.name,d),e.part);if(DCOL[t])dots.add(DCOL[t]);});
     const dotsH=[...dots].slice(0,5).map(c=>`<div class="cal-dot" style="background:${c}"></div>`).join('');
-    h+=`<div class="${cl}" onclick="calClick(${d})"><div class="cal-n">${d}</div>${hday?'<div class="holiday-label">공휴</div>':''}${hasDeadline?'<div class="holiday-label" style="color:var(--accent);">📌</div>':''}<div class="cal-dots">${dotsH}</div></div>`;
+    h+=`<div class="${cl}" onclick="calClick(${d})"><div class="cal-n">${d}</div>${hday?'<div class="holiday-label">공휴</div>':''}${hasNotice?'<div class="holiday-label" style="color:var(--accent);font-size:7px;background:var(--al);border-radius:3px;padding:1px 3px;">공지</div>':''}${hasVote?'<div class="holiday-label" style="color:var(--green);font-size:7px;background:#f0fdf4;border-radius:3px;padding:1px 3px;">투표</div>':''}<div class="cal-dots">${dotsH}</div></div>`;
   }
 
   // inline detail
@@ -1134,8 +1150,11 @@ function renderCalendar(){
     const deadlines=getNoticeDeadlinesForMonth();
     const dayDeadlines=deadlines[selCalDay]||[];
     const deadlineBanner=dayDeadlines.length?`<div style="margin:0 0 8px;background:var(--al);border:1.5px solid #bfdbfe;border-radius:var(--r);padding:10px 14px;">
-      <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px;">📌 마감일</div>
-      ${dayDeadlines.map(t=>`<div style="font-size:13px;color:var(--text2);padding:2px 0;">· ${t}</div>`).join('')}
+      <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;">📌 공지/투표</div>
+      ${dayDeadlines.map(i=>`<div style="margin-bottom:6px;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);">${i.type==='vote'?'🗳 ':'📌 '}${i.title}</div>
+        ${i.content?`<div style="font-size:12px;color:var(--text2);margin-top:2px;line-height:1.5;">${i.content.replace(/\n/g,'<br>')}</div>`:''}
+      </div>`).join('')}
     </div>`:'';
     detail=`${banner}${deadlineBanner}<div class="cal-detail">
       <div class="cal-detail-head">
@@ -1145,16 +1164,18 @@ function renderCalendar(){
           <button class="cal-close" onclick="calClose()">✕</button>
         </div>
       </div>
-      ${shiftRows(g)}
+      ${calShowSched?shiftRows(g):''}
     </div>`;
   }
 
   document.getElementById('panel-cal').innerHTML=`
     <div class="cal-wrap">
-      <div class="cal-month">${CUR_YEAR}년 ${CUR_MONTH}월</div>
+      <div class="cal-month" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>${CUR_YEAR}년 ${CUR_MONTH}월</span>
+        <button onclick="calShowSched=!calShowSched;renderCalendar();" style="font-size:12px;font-weight:700;padding:5px 12px;border-radius:20px;border:1.5px solid var(--border2);background:${calShowSched?'var(--al)':'var(--bg)'};color:${calShowSched?'var(--accent)':'var(--text3)'};cursor:pointer;font-family:inherit;">${calShowSched?'근무표 ON':'근무표 OFF'}</button>
+      </div>
       <div class="cal-grid">${h}</div>
       ${detail}
-
     </div>`;
 
   if(selCalDay){
@@ -1428,6 +1449,7 @@ function openBModal(editType=null, editId=null){
   editingBoardType=editType;
   document.getElementById('b-title').value='';
   document.getElementById('b-content').value='';
+  document.getElementById('b-startdate').value='';
   document.getElementById('b-deadline').value='';
   document.getElementById('b-vote-deadline').value='';
   document.getElementById('b-opts-list').innerHTML='';
@@ -1439,6 +1461,7 @@ function openBModal(editType=null, editId=null){
       setBType('notice');
       document.getElementById('b-title').value=item.title||'';
       document.getElementById('b-content').value=item.content||'';
+      document.getElementById('b-startdate').value=item.startdate||'';
       document.getElementById('b-deadline').value=item.deadline||'';
     }
   } else if(editType==='vote'&&editId){
@@ -1465,11 +1488,12 @@ async function saveBoard(){
   if(bType==='notice'){
     const content=document.getElementById('b-content').value.trim();
     const deadline=document.getElementById('b-deadline').value;
+    const startdate=document.getElementById('b-startdate').value;
     if(editingBoardId){
       const idx=boardData.notices.findIndex(n=>n.id===editingBoardId);
-      if(idx>=0) boardData.notices[idx]={...boardData.notices[idx],title,content,deadline};
+      if(idx>=0) boardData.notices[idx]={...boardData.notices[idx],title,content,deadline,startdate};
     } else {
-      boardData.notices.unshift({id:Date.now(),title,content,deadline,ts:Date.now()});
+      boardData.notices.unshift({id:Date.now(),title,content,deadline,startdate,ts:Date.now()});
     }
   } else {
     const opts=[...document.getElementById('b-opts-list').querySelectorAll('input')]
@@ -1520,13 +1544,22 @@ async function doVote(voteId,option){
 function getNoticeDeadlinesForMonth(){
   const result={};
   boardData.notices.forEach(n=>{
-    if(!n.deadline) return;
-    const d=new Date(n.deadline);
-    if(d.getFullYear()===CUR_YEAR&&d.getMonth()+1===CUR_MONTH){
-      const day=d.getDate();
-      if(!result[day]) result[day]=[];
-      result[day].push(n.title);
-    }
+    // 시작일~마감일 범위의 모든 날짜에 표시
+    const start=n.startdate?new Date(n.startdate):null;
+    const end=n.deadline?new Date(n.deadline):null;
+    if(!start&&!end) return;
+    const markDay=(d)=>{
+      if(d.getFullYear()===CUR_YEAR&&d.getMonth()+1===CUR_MONTH){
+        const day=d.getDate();
+        if(!result[day]) result[day]=[];
+        result[day].push({title:n.title,content:n.content,type:'notice',isStart:d.getTime()===start?.getTime(),isEnd:d.getTime()===end?.getTime()});
+      }
+    };
+    if(start&&end){
+      // 범위 전체
+      for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)) markDay(new Date(d));
+    } else if(end) markDay(end);
+    else if(start) markDay(start);
   });
   boardData.votes.forEach(v=>{
     if(!v.deadline) return;
@@ -1534,7 +1567,7 @@ function getNoticeDeadlinesForMonth(){
     if(d.getFullYear()===CUR_YEAR&&d.getMonth()+1===CUR_MONTH){
       const day=d.getDate();
       if(!result[day]) result[day]=[];
-      result[day].push('🗳 '+v.title);
+      result[day].push({title:v.title,content:'',type:'vote'});
     }
   });
   return result;
@@ -1558,7 +1591,12 @@ function renderBoard(){
   allItems.forEach(item=>{
     if(item._type==='notice'){
       const isExpired=item.deadline&&new Date(item.deadline)<today;
-      const deadlineHtml=item.deadline?`<div class="board-deadline">${isExpired?'⚠️ 마감됨':'📅'} ${item.deadline} 까지</div>`:'';
+      const deadlineHtml=(()=>{
+        if(item.startdate&&item.deadline) return `<div class="board-deadline">${isExpired?'⚠️':'📅'} ${item.startdate} ~ ${item.deadline}</div>`;
+        if(item.startdate) return `<div class="board-deadline">📅 ${item.startdate} 부터</div>`;
+        if(item.deadline) return `<div class="board-deadline">${isExpired?'⚠️ 마감됨':'📅'} ${item.deadline} 까지</div>`;
+        return '';
+      })();
       html+=`<div class="board-card${isExpired?' board-expired':''}">
         <div class="board-head">
           <div><div class="board-title">${item.title}</div><div class="board-meta">${new Date(item.ts).toLocaleDateString('ko-KR')}</div></div>
