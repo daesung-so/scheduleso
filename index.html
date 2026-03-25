@@ -138,7 +138,13 @@ header{background:var(--white);border-bottom:1px solid var(--border);padding:12p
 .month-nav-label{font-size:16px;font-weight:900;color:var(--text);letter-spacing:-.5px;}
 .month-nav-sub{font-size:11px;color:var(--text3);font-weight:500;}
 /* ── ADMIN MENU ── */
-/* ── BOARD TAB ── */
+/* ── NOTICE BANNER ── */
+.notice-top-banner{background:var(--accent);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;animation:fadeUp .2s ease;}
+.notice-top-banner.vote{background:var(--green);}
+.notice-top-banner-text{font-size:13px;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.notice-top-banner-sub{font-size:11px;opacity:.85;margin-top:1px;}
+.notice-top-banner-arrow{font-size:12px;font-weight:700;flex-shrink:0;opacity:.85;}
+.tab-badge{display:inline-block;background:var(--red);color:#fff;font-size:10px;font-weight:800;border-radius:10px;padding:1px 5px;margin-left:3px;line-height:1.4;}
 .board-wrap{padding:14px;}
 .board-add-btn{width:100%;padding:13px;border-radius:12px;border:1.5px dashed var(--border2);background:var(--white);font-size:14px;font-weight:700;color:var(--text3);cursor:pointer;font-family:inherit;margin-bottom:14px;transition:all .15s;}
 .board-card{background:var(--white);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh);overflow:hidden;margin-bottom:12px;}
@@ -164,9 +170,9 @@ header{background:var(--white);border-bottom:1px solid var(--border);padding:12p
 .vote-bar{height:4px;background:var(--accent);transition:width .3s ease;}
 .vote-names{font-size:11px;color:var(--text3);padding:0 14px 10px;line-height:1.6;}
 .vote-my-label{font-size:11px;font-weight:700;color:var(--accent);}
-.bmodal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:flex-end;justify-content:center;}
+.bmodal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:flex-end;justify-content:center;overflow-y:auto;}
 .bmodal-overlay.open{display:flex;}
-.bmodal{background:var(--white);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:20px 20px 36px;animation:slideUp .2s ease;max-height:85vh;overflow-y:auto;}
+.bmodal{background:var(--white);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:20px 20px 36px;animation:slideUp .2s ease;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-shrink:0;}
 .bmodal-handle{width:40px;height:4px;background:var(--border2);border-radius:4px;margin:0 auto 18px;}
 .bmodal-title{font-size:16px;font-weight:800;margin-bottom:16px;}
 .btype-row{display:flex;gap:8px;margin-bottom:16px;}
@@ -367,6 +373,8 @@ th,td{white-space:nowrap;padding:0;}
   </div>
 </header>
 
+<div id="notice-banner-area"></div>
+
 <div id="month-nav" class="month-nav" style="position:relative;">
   <button class="month-nav-btn" id="month-prev" onclick="navMonth(-1)">◀</button>
   <div class="month-nav-center">
@@ -543,10 +551,6 @@ let smsDayOverride=null;
 // ── STORAGE ──
 const MK='my_name_2026';
 const JKEY='$2a$10$tMh0JYAlhrIJGLZgz8fc/.9zbm2F.29jUHh6RK0dioxpRLlsYDMVq';
-const JBIN_ID='69ba04fcb7ec241ddc7a7689';
-const JBIN_ID_KEY='jsonbin_id';
-// bin ID 고정 — 모든 기기가 같은 bin 사용
-localStorage.setItem(JBIN_ID_KEY, JBIN_ID);
 
 function monthKey(y,m){return `sch_ov_${y}_${String(m).padStart(2,'0')}`;}
 function empKey(y,m){return `sch_emp_${y}_${String(m).padStart(2,'0')}`;}
@@ -559,7 +563,10 @@ function isMod(name,day){return !!loadOv()[`${name}_${day}`];}
 function getMyName(){return localStorage.getItem(MK)||'';}
 function setMyName(n){localStorage.setItem(MK,n);}
 
-// ── JSONBIN 동기화 ──
+// ── JSONBIN 통합 동기화 (긴급수정 + 공지/투표 하나의 bin으로) ──
+const UNIFIED_BIN='69ba04fcb7ec241ddc7a7689'; // 기존 overrides bin 재사용
+const BOARD_BIN='69c33eb4aa77b81da917cab7';
+
 function getAllOv(){
   const all={};
   getSortedMonths().forEach(m=>{
@@ -578,52 +585,50 @@ function applyAllOv(all){
 
 async function syncToCloud(){
   try{
-    let binId=localStorage.getItem(JBIN_ID_KEY);
     const data=getAllOv();
-    if(!binId){
-      // 처음 실행 — bin 새로 생성
-      const res=await fetch('https://api.jsonbin.io/v3/b',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','X-Master-Key':JKEY,'X-Bin-Name':'gumupyo','X-Bin-Private':'false'},
-        body:JSON.stringify(data)
-      });
-      const json=await res.json();
-      binId=json?.metadata?.id;
-      if(binId) localStorage.setItem(JBIN_ID_KEY,binId);
-      console.log('✅ 클라우드 bin 생성:', binId);
-    } else {
-      await fetch(`https://api.jsonbin.io/v3/b/${binId}`,{
-        method:'PUT',
-        headers:{'Content-Type':'application/json','X-Master-Key':JKEY},
-        body:JSON.stringify(data)
-      });
-      console.log('✅ 클라우드 업데이트 완료');
-    }
-  }catch(e){console.log('sync 오류(오프라인?):', e.message);}
+    await fetch(`https://api.jsonbin.io/v3/b/${UNIFIED_BIN}`,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','X-Master-Key':JKEY},
+      body:JSON.stringify(data)
+    });
+  }catch(e){console.log('sync 오류:', e.message);}
 }
 
 async function fetchFromCloud(){
   try{
-    let binId=localStorage.getItem(JBIN_ID_KEY);
-    if(!binId){
-      // bin이 없으면 빈 데이터로 새로 생성
-      await syncToCloud();
-      return;
-    }
-    const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`,{
+    const res=await fetch(`https://api.jsonbin.io/v3/b/${UNIFIED_BIN}/latest`,{
       headers:{'X-Master-Key':JKEY,'X-Bin-Meta':'false'}
     });
-    if(!res.ok){console.log('fetch 실패:',res.status);return;}
+    if(!res.ok) return;
     const json=await res.json();
-    // JSONBin 응답: {record: {...}} 또는 직접 데이터
-    const record=json?.record||json;
-    applyAllOv(record);
-    console.log('✅ 클라우드에서 데이터 로드');
-  }catch(e){console.log('fetch 오류(오프라인?):', e.message);}
+    applyAllOv(json?.record||json);
+  }catch(e){console.log('fetch 오류:', e.message);}
 }
 
-async function initCloud(){
-  await fetchFromCloud();
+async function initCloud(){await fetchFromCloud();}
+
+// board bin
+async function getBoardBinId(){return BOARD_BIN;}
+
+async function loadBoardFromCloud(){
+  try{
+    const res=await fetch(`https://api.jsonbin.io/v3/b/${BOARD_BIN}/latest`,{
+      headers:{'X-Master-Key':JKEY,'X-Bin-Meta':'false'}
+    });
+    const json=await res.json();
+    const r=json?.record||json;
+    if(r&&r.notices) boardData=r;
+  }catch(e){}
+  renderNoticeBanner();
+}
+
+async function saveBoardToCloud(){
+  try{
+    await fetch(`https://api.jsonbin.io/v3/b/${BOARD_BIN}`,{
+      method:'PUT',headers:{'Content-Type':'application/json','X-Master-Key':JKEY},
+      body:JSON.stringify(boardData)
+    });
+  }catch(e){}
 }
 
 // ── PIN ──
@@ -662,16 +667,14 @@ function saveMonthList(list){localStorage.setItem('month_list',JSON.stringify(li
 function switchMonth(year,month){
   CUR_YEAR=year; CUR_MONTH=month;
   const mk=`${year}_${String(month).padStart(2,'0')}`;
+  // localStorage 업로드 데이터 우선, 없으면 BUILTIN
   const stored=localStorage.getItem(empKey(year,month));
   if(stored){try{EMP=JSON.parse(stored);}catch(e){EMP=BUILTIN_MONTHS[mk]||[];}}
   else{EMP=BUILTIN_MONTHS[mk]||[];}
-  // Recalculate meta
   START=new Date(year,month-1,1).getDay();
   DAYS=new Date(year,month,0).getDate();
-  const n=new Date();
   TODAY=getToday();
   curDay=TODAY; selCalDay=null; smsDayOverride=null;
-  // Update UI
   document.getElementById('h-sub').textContent=`${year}년 ${month}월`;
   renderMonthNav();
   updateHeaderStatus();
@@ -1188,7 +1191,7 @@ function renderCalendar(){
         </div>
       </div>
       ${shiftRows(g)}
-    </div>`:(deadlineBanner?`<div style="text-align:right;"><button class="cal-close" onclick="calClose()" style="font-size:18px;color:var(--text3);background:none;border:none;cursor:pointer;">✕</button></div>`:'')}`;
+    </div>`:''}`;
   }
 
   document.getElementById('panel-cal').innerHTML=`
@@ -1413,37 +1416,48 @@ function goToday(){
   else{gridDayClick(realDay);}
 }
 
+// ── 공지 상단 배너 + 탭 뱃지 ──
+let noticeBannerIdx=0;
+function renderNoticeBanner(){
+  const today=new Date().setHours(0,0,0,0);
+  // 진행 중인 공지/투표만 (마감 안 된 것)
+  const active=[
+    ...boardData.notices.filter(n=>!n.deadline||new Date(n.deadline)>=today).map(n=>({...n,_type:'notice'})),
+    ...boardData.votes.filter(v=>!v.deadline||new Date(v.deadline)>=today).map(v=>({...v,_type:'vote'}))
+  ];
+  const area=document.getElementById('notice-banner-area');
+  if(!area) return;
+  // 탭 뱃지 업데이트
+  const tabBoard=document.getElementById('tab-board');
+  if(tabBoard){
+    const cnt=active.length;
+    tabBoard.innerHTML=`📢 공지${cnt>0?`<span class="tab-badge">${cnt}</span>`:''}`;
+  }
+  if(active.length===0){area.innerHTML='';return;}
+  // 배너 순환 (여러 개면 돌아가며)
+  noticeBannerIdx=noticeBannerIdx%active.length;
+  const item=active[noticeBannerIdx];
+  const isVote=item._type==='vote';
+  const sub=isVote
+    ?`🗳 투표 · ${item.deadline?item.deadline+' 마감':'마감일 없음'}`
+    :`📌 공지${item.deadline?' · '+item.deadline+' 까지':''}`;
+  area.innerHTML=`<div class="notice-top-banner${isVote?' vote':''}" onclick="switchTab('board')">
+    <div>
+      <div class="notice-top-banner-text">${item.title}</div>
+      <div class="notice-top-banner-sub">${sub}</div>
+    </div>
+    <div class="notice-top-banner-arrow">보기 ›</div>
+  </div>`;
+  // 여러 개면 5초마다 다음 공지로
+  if(active.length>1){
+    clearTimeout(renderNoticeBanner._timer);
+    renderNoticeBanner._timer=setTimeout(()=>{noticeBannerIdx++;renderNoticeBanner();},5000);
+  }
+}
+
 // ── BOARD (공지/투표) ──
-const BOARD_BIN_KEY='board_bin_id';
 let boardData={notices:[],votes:[]};
 let bType='notice', bAnon=false;
-
-async function getBoardBinId(){
-  // 고정 bin ID — 모든 기기 공유
-  const FIXED_BOARD_BIN='69c33eb4aa77b81da917cab7';
-  localStorage.setItem(BOARD_BIN_KEY, FIXED_BOARD_BIN);
-  return FIXED_BOARD_BIN;
-}
-async function loadBoardFromCloud(){
-  const id=await getBoardBinId();
-  if(!id) return;
-  try{
-    const res=await fetch(`https://api.jsonbin.io/v3/b/${id}/latest`,{headers:{'X-Master-Key':JKEY,'X-Bin-Meta':'false'}});
-    const json=await res.json();
-    const r=json?.record||json;
-    if(r&&r.notices) boardData=r;
-  }catch(e){}
-}
-async function saveBoardToCloud(){
-  const id=await getBoardBinId();
-  if(!id) return;
-  try{
-    await fetch(`https://api.jsonbin.io/v3/b/${id}`,{
-      method:'PUT',headers:{'Content-Type':'application/json','X-Master-Key':JKEY},
-      body:JSON.stringify(boardData)
-    });
-  }catch(e){}
-}
 
 function setAnon(val){
   bAnon=val;
@@ -1534,6 +1548,7 @@ async function saveBoard(){
   document.getElementById('bmodal-overlay').classList.remove('open');
   await saveBoardToCloud();
   renderBoard();
+  renderNoticeBanner();
 }
 
 async function deleteBoard(type,id){
@@ -1542,6 +1557,7 @@ async function deleteBoard(type,id){
   else boardData.votes=boardData.votes.filter(v=>v.id!==id);
   await saveBoardToCloud();
   renderBoard();
+  renderNoticeBanner();
 }
 
 async function doVote(voteId,option){
@@ -1697,17 +1713,13 @@ initCloud().then(()=>{
 loadBoardFromCloud().then(()=>{
   if(activeTab==='board') renderBoard();
 });
-// 30초마다 공지/투표 자동 업데이트
+// 30초마다 긴급수정 + 공지/투표 한번에 업데이트
 setInterval(async()=>{
-  await loadBoardFromCloud();
-  if(activeTab==='board') renderBoard();
-}, 30000);
-// 30초마다 긴급수정도 자동 업데이트
-setInterval(async()=>{
-  await fetchFromCloud();
+  await Promise.all([fetchFromCloud(), loadBoardFromCloud()]);
   if(activeTab==='daily') renderDaily(curDay);
   else if(activeTab==='cal') renderCalendar();
   else if(activeTab==='grid') renderGrid();
+  else if(activeTab==='board') renderBoard();
 }, 30000);
 </script>
 </body>
