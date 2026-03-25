@@ -1439,6 +1439,8 @@ function goToBoard(id){
     }
   },150);
 }
+
+function renderNoticeBanner(){
   const today=new Date().setHours(0,0,0,0);
   const active=[
     ...boardData.notices.filter(n=>!n.deadline||new Date(n.deadline)>=today).map(n=>({...n,_type:'notice'})),
