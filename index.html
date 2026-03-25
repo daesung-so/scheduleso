@@ -967,18 +967,12 @@ const DCOL={core:'#2563eb',svc:'#16a34a',night:'#7c3aed',rest:'#94a3b8',vacation
 
 function groups(day){
   const g={core:[],svc:[],gobul:[],rest:[],night:[],vacation:[],work:[],jakgum:[],trip:[],half:[],halfam:[]};
-  // 일반 직원
+  // 일반 직원만 (기술팀 제외)
   EMP.forEach(e=>{
     const v=getVal(e.name,day);const t=tp(v,e.part);
     const num=getNum(v);const mod=isMod(e.name,day);
     if(v==='작검'||v==='집작') g.jakgum.push({name:e.name,v,num,mod});
     else if(g[t]) g[t].push({name:e.name,v,num,mod});
-  });
-  // 기술팀
-  EXTRA_MEMBERS.forEach(name=>{
-    const v=getVal(name,day);const t=tp(v,'CORE');
-    const num=getNum(v);const mod=isMod(name,day);
-    if(g[t]) g[t].push({name,v,num,mod});
   });
   Object.keys(g).forEach(k=>{g[k].sort((a,b)=>(a.num?+a.num:99)-(b.num?+b.num:99));});
   return g;
@@ -1155,7 +1149,13 @@ function renderCalendar(){
     const dots=new Set();
     EMP.forEach(e=>{const t=tp(getVal(e.name,d),e.part);if(DCOL[t])dots.add(DCOL[t]);});
     const dotsH=[...dots].slice(0,5).map(c=>`<div class="cal-dot" style="background:${c}"></div>`).join('');
-    h+=`<div class="${cl}" onclick="calClick(${d})"><div class="cal-n">${d}</div>${hday?'<div class="holiday-label">공휴</div>':''}<div class="cal-dots">${dotsH}${hasNotice?'<div class="cal-dot" style="background:var(--accent);width:5px;height:5px;"></div>':''}${hasVote?'<div class="cal-dot" style="background:var(--green);width:5px;height:5px;"></div>':''}</div></div>`;
+    // 공지/투표 셀 하단 컬러 바
+    let cellStyle='';
+    if(hasNotice&&hasVote) cellStyle='box-shadow:inset 0 -3px 0 var(--accent),inset 0 -6px 0 var(--green);border-radius:8px;';
+    else if(hasNotice) cellStyle='box-shadow:inset 0 -4px 0 var(--accent);border-radius:8px;';
+    else if(hasVote) cellStyle='box-shadow:inset 0 -4px 0 var(--green);border-radius:8px;';
+
+    h+=`<div class="${cl}" onclick="calClick(${d})" style="${cellStyle}"><div class="cal-n">${d}</div>${hday?'<div class="holiday-label">공휴</div>':''}<div class="cal-dots">${dotsH}</div></div>`;
   }
 
   // inline detail
