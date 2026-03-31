@@ -542,7 +542,8 @@ let EMP=BUILTIN_MONTHS[_initKey]||BUILTIN_MONTHS[Object.keys(BUILTIN_MONTHS).sor
 let CUR_YEAR=EMP.length?_initYear:parseInt(Object.keys(BUILTIN_MONTHS).sort().pop().split('_')[0]);
 let CUR_MONTH=EMP.length?_initMonth:parseInt(Object.keys(BUILTIN_MONTHS).sort().pop().split('_')[1]);
 if(!EMP.length){EMP=BUILTIN_MONTHS[`${CUR_YEAR}_${String(CUR_MONTH).padStart(2,'0')}`]||[];}
-let START=0, DAYS=31;
+let START=new Date(CUR_YEAR,CUR_MONTH-1,1).getDay();
+let DAYS=new Date(CUR_YEAR,CUR_MONTH,0).getDate();
 // TODAY: 앱 열 때마다 실시간 계산
 function getToday(){
   const n=new Date();
