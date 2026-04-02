@@ -784,18 +784,14 @@ function renderMonthNav(){
   const idx=all.findIndex(m=>m.year===CUR_YEAR&&m.month===CUR_MONTH);
   const now=new Date();
   document.getElementById('month-nav-label').textContent=`${CUR_YEAR}년 ${CUR_MONTH}월`;
-  if(activeTab==='cal'||activeTab==='board'){
-    document.getElementById('month-nav-sub').textContent=EMP.length?'':'근무표 없음';
-    // 이전: 데이터 있는 달 또는 같은 연도 1월까지
-    const canPrev=idx>0||(CUR_MONTH>1||CUR_YEAR>now.getFullYear());
-    const canNext=idx<all.length-1||(CUR_MONTH<12&&CUR_YEAR<=now.getFullYear());
-    document.getElementById('month-prev').disabled=!canPrev;
-    document.getElementById('month-next').disabled=!canNext;
-  } else {
-    document.getElementById('month-nav-sub').textContent=`${idx+1} / ${all.length}`;
-    document.getElementById('month-prev').disabled=idx<=0;
-    document.getElementById('month-next').disabled=idx>=all.length-1;
-  }
+  document.getElementById('month-nav-sub').textContent=
+    idx>=0?`${idx+1} / ${all.length}${EMP.length?'':'  근무표 없음'}`:'근무표 없음';
+  // 이전: 데이터 달이 있거나, 지금 달이 1월이 아니면
+  const canPrev=idx>0||(idx<0&&(CUR_MONTH>1||CUR_YEAR>now.getFullYear()));
+  // 다음: 데이터 달이 있거나, 12월 미만이면
+  const canNext=(idx>=0&&idx<all.length-1)||(CUR_MONTH<12&&CUR_YEAR<=now.getFullYear())||(idx<0&&CUR_MONTH<12);
+  document.getElementById('month-prev').disabled=!canPrev;
+  document.getElementById('month-next').disabled=!canNext;
   const delItem=document.getElementById('admin-del-item');
   if(delItem) delItem.classList.remove('disabled');
 }
@@ -837,41 +833,36 @@ function deleteMonth(){
 function navMonth(dir){
   const now=new Date();
   const thisYear=now.getFullYear();
-
-  // 달력 탭 또는 데이터 없는 달: 자유롭게 이동
   const all=getSortedMonths();
   const idx=all.findIndex(m=>m.year===CUR_YEAR&&m.month===CUR_MONTH);
-  const hasPrev=idx>0;
-  const hasNext=idx<all.length-1;
 
-  // 데이터 있는 달 이동 우선, 없으면 빈 달로 이동
-  if(dir===1&&hasNext){
-    const next=all[idx+dir];
-    switchMonth(next.year,next.month);
-  } else if(dir===-1&&hasPrev){
-    const next=all[idx+dir];
-    switchMonth(next.year,next.month);
-  } else {
-    // 데이터 없는 달로 이동 (달력/공지 탭에서만)
-    if(activeTab==='cal'||activeTab==='board'){
-      let y=CUR_YEAR, m=CUR_MONTH+dir;
-      if(m>12){m=1;y++;}
-      if(m<1){m=12;y--;}
-      if(y<thisYear) return;
-      if(y>thisYear+1) return;
-      CUR_YEAR=y; CUR_MONTH=m;
-      const mk=`${y}_${String(m).padStart(2,'0')}`;
-      const stored=localStorage.getItem(empKey(y,m));
-      if(stored){try{EMP=JSON.parse(stored);}catch(e){EMP=BUILTIN_MONTHS[mk]||[];}}
-      else EMP=BUILTIN_MONTHS[mk]||[];
-      START=new Date(y,m-1,1).getDay();
-      DAYS=new Date(y,m,0).getDate();
-      TODAY=getToday(); selCalDay=null;
-      renderMonthNav();
-      if(activeTab==='cal') renderCalendar();
-      if(activeTab==='board') renderBoard();
-    }
+  if(idx>=0){
+    // 현재 달이 데이터 있는 달
+    const hasPrev=idx>0;
+    const hasNext=idx<all.length-1;
+    if(dir===1&&hasNext){switchMonth(all[idx+1].year,all[idx+1].month);return;}
+    if(dir===-1&&hasPrev){switchMonth(all[idx-1].year,all[idx-1].month);return;}
   }
+
+  // 데이터 없는 달이거나 마지막/첫 데이터 달에서 더 이동 → 자유 이동
+  let y=CUR_YEAR, m=CUR_MONTH+dir;
+  if(m>12){m=1;y++;}
+  if(m<1){m=12;y--;}
+  if(y<thisYear) return;
+  if(y>thisYear+1) return;
+  CUR_YEAR=y; CUR_MONTH=m;
+  const mk=`${y}_${String(m).padStart(2,'0')}`;
+  const stored=localStorage.getItem(empKey(y,m));
+  if(stored){try{EMP=JSON.parse(stored);}catch(e){EMP=BUILTIN_MONTHS[mk]||[];}}
+  else EMP=BUILTIN_MONTHS[mk]||[];
+  START=new Date(y,m-1,1).getDay();
+  DAYS=new Date(y,m,0).getDate();
+  TODAY=getToday(); selCalDay=null;
+  renderMonthNav();
+  if(activeTab==='daily') renderDaily(TODAY);
+  else if(activeTab==='cal') renderCalendar();
+  else if(activeTab==='grid') renderGrid();
+  else if(activeTab==='board') renderBoard();
 }
 
 // ── EXCEL UPLOAD & PARSE ──
