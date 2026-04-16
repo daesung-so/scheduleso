@@ -17,13 +17,13 @@ export default {
     // ── /api/board (공지·투표·휴가) ──
     if (url.pathname === '/api/board') {
       if (request.method === 'GET') {
-        const data = await env.SO_KV.get('board');
+        const data = await env.SO_SCHEDULE.get('board');
         const body = data ?? JSON.stringify({ notices: [], votes: [], vacations: [] });
         return new Response(body, { headers: CORS });
       }
       if (request.method === 'PUT') {
         const body = await request.text();
-        await env.SO_KV.put('board', body);
+        await env.SO_SCHEDULE.put('board', body);
         return new Response(JSON.stringify({ ok: true }), { headers: CORS });
       }
     }
@@ -31,13 +31,27 @@ export default {
     // ── /api/overrides (긴급수정) ──
     if (url.pathname === '/api/overrides') {
       if (request.method === 'GET') {
-        const data = await env.SO_KV.get('overrides');
+        const data = await env.SO_SCHEDULE.get('overrides');
         const body = data ?? '{}';
         return new Response(body, { headers: CORS });
       }
       if (request.method === 'PUT') {
         const body = await request.text();
-        await env.SO_KV.put('overrides', body);
+        await env.SO_SCHEDULE.put('overrides', body);
+        return new Response(JSON.stringify({ ok: true }), { headers: CORS });
+      }
+    }
+
+    // ── /api/temperature (온습도 점검) ──
+    if (url.pathname === '/api/temperature') {
+      if (request.method === 'GET') {
+        const data = await env.SO_SCHEDULE.get('temperature');
+        const body = data ?? '[]';
+        return new Response(body, { headers: CORS });
+      }
+      if (request.method === 'PUT') {
+        const body = await request.text();
+        await env.SO_SCHEDULE.put('temperature', body);
         return new Response(JSON.stringify({ ok: true }), { headers: CORS });
       }
     }
