@@ -1220,12 +1220,13 @@ const PCLS={core:'cc',svc:'cs2',night:'cn',rest:'cr',vacation:'cv',gobul:'cg',wo
 const DCOL={core:'#2563eb',svc:'#16a34a',night:'#7c3aed',rest:'#94a3b8',vacation:'#d97706',gobul:'#dc2626',work:'#0891b2',trip:'#9333ea',half:'#d97706',halfam:'#d97706'};
 
 function groups(day){
-  const g={core:[],svc:[],gobul:[],rest:[],night:[],vacation:[],work:[],jakgum:[],trip:[],half:[],halfam:[]};
+  const g={core:[],svc:[],gobul:[],rest:[],night:[],vacation:[],work:[],jakgum:[],trip:[],half:[],halfam:[],altwork:[],checkup:[]};
   // 일반 직원만 (기술팀 제외)
   EMP.forEach(e=>{
     const v=getVal(e.name,day);const t=tp(v,e.part);
     const num=getNum(v);const mod=isMod(e.name,day);
     if(v==='작검'||v==='집작') g.jakgum.push({name:e.name,v,num,mod});
+    else if(t==='altwork'||t==='checkup') g.vacation.push({name:e.name,v,num,mod});
     else if(g[t]) g[t].push({name:e.name,v,num,mod});
   });
   Object.keys(g).forEach(k=>{g[k].sort((a,b)=>(a.num?+a.num:99)-(b.num?+b.num:99));});
