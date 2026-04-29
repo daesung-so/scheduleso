@@ -869,6 +869,14 @@ function pinKey(){}
 function pinDel(){}
 function closePin(){}
 
+// ── SAFE HTML HELPERS ──
+function esc(v){
+  return String(v??'').replace(/[&<>"']/g,m=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
+function nl2br(v){return esc(v).replace(/\n/g,'<br>');}
+
 // ── MONTH MANAGEMENT ──
 function getStoredMonths(){
   try{return JSON.parse(localStorage.getItem('month_list')||'[]');}catch(e){return [];}
@@ -1422,13 +1430,13 @@ function renderCalendar(){
     const dow=DOW[(START+selCalDay-1)%7];
     const ov=loadOv();
     const mods=Object.entries(ov).filter(([k])=>k.endsWith(`_${selCalDay}`));
-    const banner=mods.length?`<div class="ov-banner"><div class="ob-l"><div class="ob-title">🔶 긴급수정 적용됨</div><div class="ob-list">${mods.map(([k,v])=>`${k.split('_')[0]} → ${v.val}`).join(' · ')}</div></div><button class="ob-clr" onclick="clearDay(${selCalDay})">되돌리기</button></div>`:'';
+    const banner=mods.length?`<div class="ov-banner"><div class="ob-l"><div class="ob-title">🔶 긴급수정 적용됨</div><div class="ob-list">${mods.map(([k,v])=>`${esc(k.split('_')[0])} → ${esc(v.val)}`).join(' · ')}</div></div><button class="ob-clr" onclick="clearDay(${selCalDay})">되돌리기</button></div>`:'';
     const deadlines=getNoticeDeadlinesForMonth();
     const dayDeadlines=deadlines[selCalDay]||[];
     const deadlineBanner=dayDeadlines.length?`<div style="margin:0 0 8px;background:var(--white);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;">
       ${dayDeadlines.map(i=>`<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;cursor:pointer;" onclick="goToBoard(${i.id})">
         <div style="width:4px;min-height:20px;border-radius:4px;background:${i.type==='vote'?'var(--green)':'var(--accent)'};flex-shrink:0;align-self:stretch;"></div>
-        <div style="font-size:13px;font-weight:700;color:var(--accent);flex:1;">${i.title}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--accent);flex:1;">${esc(i.title)}</div>
         <div style="font-size:11px;color:var(--text3);">보기 ›</div>
       </div>`).join('')}
     </div>`:'';
@@ -2104,11 +2112,11 @@ function renderNoticeBanner(){
   const item=bannerList[noticeBannerIdx];
   const isVote=item._type==='vote';
   const sub=isVote
-    ?`🗳 투표 · ${item.deadline?item.deadline+' 마감':'마감일 없음'}`
-    :`📌 공지${item.deadline?' · '+item.deadline+' 까지':''}`;
+    ?`🗳 투표 · ${item.deadline?esc(item.deadline)+' 마감':'마감일 없음'}`
+    :`📌 공지${item.deadline?' · '+esc(item.deadline)+' 까지':''}`;
   area.innerHTML=`<div class="notice-top-banner${isVote?' vote':''}" onclick="switchTab('board')">
     <div>
-      <div class="notice-top-banner-text">${item.title}</div>
+      <div class="notice-top-banner-text">${esc(item.title)}</div>
       <div class="notice-top-banner-sub">${sub}</div>
     </div>
     <div class="notice-top-banner-arrow">보기 ›</div>
@@ -2139,7 +2147,16 @@ function addVoteOpt(val=''){
   const list=document.getElementById('b-opts-list');
   const idx=list.children.length;
   const div=document.createElement('div');div.className='vote-opt-row';
-  div.innerHTML=`<input class="modal-inp" placeholder="항목 ${idx+1}" value="${val}"><button class="vote-opt-del" onclick="this.parentElement.remove()">✕</button>`;
+  const input=document.createElement('input');
+  input.className='modal-inp';
+  input.placeholder=`항목 ${idx+1}`;
+  input.value=val||'';
+  const btn=document.createElement('button');
+  btn.className='vote-opt-del';
+  btn.type='button';
+  btn.textContent='✕';
+  btn.onclick=()=>div.remove();
+  div.append(input,btn);
   list.appendChild(div);
 }
 let editingBoardId=null, editingBoardType=null;
@@ -2189,6 +2206,10 @@ async function saveBoard(){
     const content=document.getElementById('b-content').value.trim();
     const deadline=document.getElementById('b-deadline').value;
     const startdate=document.getElementById('b-startdate').value;
+    if(startdate&&deadline&&startdate>deadline){
+      alert('시작일은 마감일보다 늦을 수 없습니다');
+      return;
+    }
     if(editingBoardId){
       const idx=boardData.notices.findIndex(n=>n.id===editingBoardId);
       if(idx>=0) boardData.notices[idx]={...boardData.notices[idx],title,content,deadline,startdate};
@@ -2236,6 +2257,11 @@ async function doVote(voteId,option){
   else vote.votes[myName]=option;
   renderBoard();
   await saveBoardToCloud();
+}
+function doVoteOption(voteId,optIndex){
+  const vote=boardData.votes.find(v=>v.id===voteId);
+  const option=vote?.options?.[optIndex];
+  if(option) doVote(voteId,option);
 }
 
 // 달력에서 공지 마감일 표시용
@@ -2293,17 +2319,19 @@ function renderBoard(){
   }
 
   allItems.forEach(item=>{
+    const safeTitle=esc(item.title);
+    const safeDate=esc(new Date(item.ts).toLocaleDateString('ko-KR'));
     if(item._type==='notice'){
       const isExpired=item.deadline&&new Date(item.deadline)<today;
       const deadlineHtml=(()=>{
-        if(item.startdate&&item.deadline) return `<div class="board-deadline">${isExpired?'⚠️':'📅'} ${item.startdate} ~ ${item.deadline}</div>`;
-        if(item.startdate) return `<div class="board-deadline">📅 ${item.startdate} 부터</div>`;
-        if(item.deadline) return `<div class="board-deadline">${isExpired?'⚠️ 마감됨':'📅'} ${item.deadline} 까지</div>`;
+        if(item.startdate&&item.deadline) return `<div class="board-deadline">${isExpired?'⚠️':'📅'} ${esc(item.startdate)} ~ ${esc(item.deadline)}</div>`;
+        if(item.startdate) return `<div class="board-deadline">📅 ${esc(item.startdate)} 부터</div>`;
+        if(item.deadline) return `<div class="board-deadline">${isExpired?'⚠️ 마감됨':'📅'} ${esc(item.deadline)} 까지</div>`;
         return '';
       })();
       html+=`<div class="board-card${isExpired?' board-expired':''}" id="bitem-${item.id}">
         <div class="board-head">
-          <div><div class="board-title">${item.title}</div><div class="board-meta">${new Date(item.ts).toLocaleDateString('ko-KR')}</div></div>
+          <div><div class="board-title">${safeTitle}</div><div class="board-meta">${safeDate}</div></div>
           <div style="display:flex;align-items:center;gap:8px;">
             <span class="board-badge ${isExpired?'bb-done':'bb-notice'}">${isExpired?'만료':'공지'}</span>
             <button class="board-del" style="color:var(--accent);font-size:14px;" onclick="requirePin('editboard_notice_${item.id}')">✏️</button>
@@ -2311,7 +2339,7 @@ function renderBoard(){
           </div>
         </div>
         <div class="board-body">
-          <div class="board-content">${(item.content||'').replace(/\n/g,'<br>')}</div>
+          <div class="board-content">${nl2br(item.content)}</div>
           ${deadlineHtml}
         </div>
       </div>`;
@@ -2319,30 +2347,30 @@ function renderBoard(){
       const isExpired=item.deadline&&new Date(item.deadline)<today;
       const total=Object.keys(item.votes||{}).length;
       let optsHtml='<div class="vote-options">';
-      item.options.forEach(opt=>{
+      item.options.forEach((opt,optIndex)=>{
         const voters=Object.entries(item.votes||{}).filter(([,v])=>v===opt).map(([n])=>n);
         const cnt=voters.length;
         const pct=total>0?Math.round(cnt/total*100):0;
         const isMyVote=myName&&item.votes[myName]===opt;
-        const clickable=!isExpired?`onclick="doVote(${item.id},'${opt.replace(/'/g,"\\'")}')"`:'' ;
+        const clickable=!isExpired?`onclick="doVoteOption(${item.id},${optIndex})"`:'' ;
         // 익명이면 이름 숨김
-        const namesHtml=(!item.anon&&voters.length)?`<div class="vote-names">${voters.join(', ')}</div>`:'';
+        const namesHtml=(!item.anon&&voters.length)?`<div class="vote-names">${esc(voters.join(', '))}</div>`:'';
         optsHtml+=`<div class="vote-option${isMyVote?' voted':''}" ${clickable} style="${isExpired?'cursor:default;':''}">
           <div class="vote-option-inner">
-            <span class="vote-option-label">${opt}${isMyVote?' <span class="vote-my-label">✓</span>':''}</span>
+            <span class="vote-option-label">${esc(opt)}${isMyVote?' <span class="vote-my-label">✓</span>':''}</span>
             <span class="vote-count">${cnt}명 (${pct}%)</span>
           </div>
           <div class="vote-bar-wrap"><div class="vote-bar" style="width:${pct}%"></div></div>
           ${namesHtml}
         </div>`;
       });
-      const deadlineHtml=item.deadline?`<div class="board-deadline">${isExpired?'⚠️ 투표 마감됨':'📅'} ${item.deadline} 까지</div>`:'';
+      const deadlineHtml=item.deadline?`<div class="board-deadline">${isExpired?'⚠️ 투표 마감됨':'📅'} ${esc(item.deadline)} 까지</div>`:'';
       optsHtml+=`</div>
         ${deadlineHtml}
         <div style="font-size:12px;color:var(--text3);margin-top:8px;">총 ${total}명 참여 · ${item.anon?'익명 투표':'이름 공개 투표'}${!isExpired?' · 항목을 눌러 투표':''}</div>`;
       html+=`<div class="board-card" id="bitem-${item.id}">
         <div class="board-head">
-          <div><div class="board-title">${item.title}</div><div class="board-meta">${new Date(item.ts).toLocaleDateString('ko-KR')}</div></div>
+          <div><div class="board-title">${safeTitle}</div><div class="board-meta">${safeDate}</div></div>
           <div style="display:flex;align-items:center;gap:8px;">
             <span class="board-badge ${isExpired?'bb-done':'bb-vote'}">${isExpired?'마감':'투표'}</span>
             <button class="board-del" style="color:var(--accent);font-size:14px;" onclick="requirePin('editboard_vote_${item.id}')">✏️</button>
